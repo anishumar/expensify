@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon on the home screen or in the app drawer -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutId="add_expense"
+        android:shortcutLongLabel="@string/shortcut_expense_long"
+        android:shortcutShortLabel="@string/shortcut_expense">
+        <intent
+            android:action="com.anishumar.kharcha.ADD_EXPENSE"
+            android:targetClass="com.anishumar.kharcha.ui.MainActivity"
+            android:targetPackage="com.anishumar.kharcha" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_lent"
+        android:shortcutId="add_lent"
+        android:shortcutLongLabel="@string/shortcut_lent_long"
+        android:shortcutShortLabel="@string/shortcut_lent">
+        <intent
+            android:action="com.anishumar.kharcha.ADD_LENT"
+            android:targetClass="com.anishumar.kharcha.ui.MainActivity"
+            android:targetPackage="com.anishumar.kharcha" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_borrowed"
+        android:shortcutId="add_borrowed"
+        android:shortcutLongLabel="@string/shortcut_borrowed_long"
+        android:shortcutShortLabel="@string/shortcut_borrowed">
+        <intent
+            android:action="com.anishumar.kharcha.ADD_BORROWED"
+            android:targetClass="com.anishumar.kharcha.ui.MainActivity"
+            android:targetPackage="com.anishumar.kharcha" />
+    </shortcut>
+</shortcuts>

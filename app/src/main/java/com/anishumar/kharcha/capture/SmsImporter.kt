@@ -43,8 +43,11 @@ object SmsImporter {
                     amount = p.amount, payee = payee, category = Categories.guess(ctx, payee),
                     source = Source.SMS, ref = p.ref, timestamp = ts, raw = body
                 )
-                if (CaptureManager.findDuplicate(ctx, e) == null) {
-                    db.insert(e); added++
+                // same lock as live captures, so an SMS arriving mid-import isn't saved twice
+                synchronized(CaptureManager) {
+                    if (CaptureManager.findDuplicate(ctx, e) == null) {
+                        db.insert(e); added++
+                    }
                 }
             }
         }

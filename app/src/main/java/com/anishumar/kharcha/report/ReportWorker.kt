@@ -9,7 +9,6 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.anishumar.kharcha.KharchaApp
 import com.anishumar.kharcha.R
-import com.anishumar.kharcha.data.Categories
 import com.anishumar.kharcha.data.ExpenseDb
 import com.anishumar.kharcha.data.Money
 import com.anishumar.kharcha.ui.MainActivity
@@ -39,16 +38,16 @@ class ReportWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
 
     private fun post(ctx: Context, p: Period, title: String, id: Int) {
         val db = ExpenseDb.get(ctx)
-        val list = db.between(p.start, p.end)
+        val list = db.spending(p.start, p.end)
         if (list.isEmpty()) return
         val s = Reports.summarize(p, list)
-        val prev = db.between(p.shift(-1).start, p.shift(-1).end).sumOf { it.amount }
+        val prev = db.spending(p.shift(-1).start, p.shift(-1).end).sumOf { it.amount }
         val change = if (prev > 0) {
             val pct = ((s.total - prev) / prev * 100).toInt()
             if (pct >= 0) " (▲$pct% vs previous)" else " (▼${-pct}% vs previous)"
         } else ""
         val lines = s.byCategory.take(4).joinToString("\n") { (c, v) ->
-            "${Categories.emoji[c] ?: ""} $c: ${Money.format(v)}"
+            "$c: ${Money.format(v)}"
         }
         val pi = PendingIntent.getActivity(
             ctx, id,

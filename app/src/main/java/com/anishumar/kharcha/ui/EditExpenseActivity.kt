@@ -16,7 +16,7 @@ import com.anishumar.kharcha.data.Categories
 import com.anishumar.kharcha.data.Expense
 import com.anishumar.kharcha.data.ExpenseDb
 import com.anishumar.kharcha.data.Source
-import com.google.android.material.appbar.MaterialToolbar
+import android.content.res.ColorStateList
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import java.text.SimpleDateFormat
@@ -32,6 +32,7 @@ class EditExpenseActivity : AppCompatActivity() {
         const val EXTRA_CATEGORY = "category"
         const val EXTRA_REF = "ref"
         const val EXTRA_SOURCE = "source"
+        const val EXTRA_TIME = "time"
     }
 
     private val db by lazy { ExpenseDb.get(this) }
@@ -39,12 +40,16 @@ class EditExpenseActivity : AppCompatActivity() {
     private var ts = System.currentTimeMillis()
     private val df = SimpleDateFormat("EEE, d MMM yyyy · h:mm a", Locale("en", "IN"))
 
+    override fun finish() {
+        super.finish()
+        Ui.popTransition(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_edit)
-        val tb = findViewById<MaterialToolbar>(R.id.toolbar)
-        tb.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
-        tb.setNavigationOnClickListener { finish() }
+        findViewById<View>(R.id.back).setOnClickListener { finish() }
+        val title = findViewById<TextView>(R.id.title)
 
         val expenseId = intent.getLongExtra(EXTRA_ID, -1)
         existing = if (expenseId > 0) db.byId(expenseId) else null
@@ -61,18 +66,31 @@ class EditExpenseActivity : AppCompatActivity() {
         val startAmount = e?.amount ?: intent.getDoubleExtra(EXTRA_AMOUNT, 0.0)
         val startPayee = e?.payee ?: intent.getStringExtra(EXTRA_PAYEE) ?: ""
         val startCat = e?.category ?: intent.getStringExtra(EXTRA_CATEGORY) ?: "Other"
-        ts = e?.timestamp ?: System.currentTimeMillis()
-        tb.title = if (e != null) "Edit expense" else "New expense"
+        ts = e?.timestamp ?: intent.getLongExtra(EXTRA_TIME, System.currentTimeMillis())
+        title.text = if (e != null) "Edit" else "New expense"
 
         if (startAmount > 0) amount.text = if (startAmount % 1.0 == 0.0) startAmount.toLong().toString() else startAmount.toString()
         payee.text = startPayee
         note.text = e?.note ?: ""
 
-        for (cat in Categories.all) {
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        // a payment marked as lent / paid back keeps that category unless changed here
+        val choices = if (startCat in Categories.all) Categories.all else Categories.all + startCat
+        for (cat in choices) {
             chips.addView(Chip(this).apply {
-                text = "${Categories.emoji[cat]} $cat"
+                text = cat
+                setChipIconResource(Ui.categoryIcon(cat))
+                chipIconSize = Ui.dp(this@EditExpenseActivity, 16).toFloat()
+                chipIconTint = ColorStateList(states, intArrayOf(Ui.PAPER, Ui.INK))
+                isChipIconVisible = true
                 tag = cat
+                typeface = Ui.medium(this@EditExpenseActivity)
+                textSize = 14f
                 isCheckable = true
+                isCheckedIconVisible = false
+                chipStrokeWidth = 0f
+                chipBackgroundColor = ColorStateList(states, intArrayOf(Ui.INK, Ui.FILL))
+                setTextColor(ColorStateList(states, intArrayOf(Ui.PAPER, Ui.INK)))
                 isChecked = cat == startCat
                 id = View.generateViewId()
             })
@@ -93,7 +111,7 @@ class EditExpenseActivity : AppCompatActivity() {
         val src = e?.source ?: intent.getStringExtra(EXTRA_SOURCE) ?: Source.MANUAL
         val ref = e?.ref ?: intent.getStringExtra(EXTRA_REF)
         findViewById<TextView>(R.id.meta).text =
-            "Captured via ${Source.label(src)}" + (ref?.let { "\nRef: $it" } ?: "")
+            "Logged from ${Source.label(src)}" + (ref?.let { "\nRef $it" } ?: "")
 
         val del = findViewById<Button>(R.id.delete)
         del.visibility = if (e != null) View.VISIBLE else View.GONE

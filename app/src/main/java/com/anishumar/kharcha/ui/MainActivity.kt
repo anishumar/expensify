@@ -1,44 +1,35 @@
 package com.anishumar.kharcha.ui
 
-import android.Manifest
-import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.MenuItem
 import android.view.View
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.widget.NestedScrollView
+import androidx.dynamicanimation.animation.DynamicAnimation
+import androidx.dynamicanimation.animation.SpringAnimation
+import androidx.dynamicanimation.animation.SpringForce
 import com.anishumar.kharcha.R
+import com.anishumar.kharcha.capture.CaptureManager
+import com.anishumar.kharcha.capture.PaymentParser
 import com.anishumar.kharcha.capture.ScreenReaderService
-import com.anishumar.kharcha.capture.SmsImporter
 import com.anishumar.kharcha.data.Categories
 import com.anishumar.kharcha.data.Expense
+import com.anishumar.kharcha.data.Ledger
 import com.anishumar.kharcha.data.ExpenseDb
 import com.anishumar.kharcha.data.Money
-import com.anishumar.kharcha.data.Source
 import com.anishumar.kharcha.report.Period
 import com.anishumar.kharcha.report.PeriodType
 import com.anishumar.kharcha.report.Reports
-import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.button.MaterialButtonToggleGroup
-import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
@@ -46,178 +37,219 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_PERIOD = "period"
         const val EXTRA_START = "start"
-        private const val REQ_SMS = 11
-        private const val REQ_NOTIF = 12
+
+        // launcher shortcuts (long-press the app icon), see res/xml/shortcuts.xml
+        const val ACTION_ADD_EXPENSE = "com.anishumar.kharcha.ADD_EXPENSE"
+        const val ACTION_ADD_LENT = "com.anishumar.kharcha.ADD_LENT"
+        const val ACTION_ADD_BORROWED = "com.anishumar.kharcha.ADD_BORROWED"
+        private const val KEY_REPAIR = "repair_version"
+        private const val REPAIR_VERSION = 2
     }
 
     private lateinit var period: Period
     private val db by lazy { ExpenseDb.get(this) }
     private val prefs by lazy { getSharedPreferences(ScreenReaderService.PREFS, MODE_PRIVATE) }
-    private val dp get() = resources.displayMetrics.density
+    private fun dp(v: Int) = Ui.dp(this, v)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         val type = intent.getStringExtra(EXTRA_PERIOD)?.let { PeriodType.valueOf(it) } ?: PeriodType.WEEK
         period = Period.of(type, intent.getLongExtra(EXTRA_START, System.currentTimeMillis()))
 
-        setupToolbar()
-
-        val toggle = findViewById<MaterialButtonToggleGroup>(R.id.periodToggle)
-        toggle.check(if (type == PeriodType.WEEK) R.id.btnWeek else R.id.btnMonth)
-        toggle.addOnButtonCheckedListener { _, id, checked ->
-            if (!checked) return@addOnButtonCheckedListener
-            period = Period.of(if (id == R.id.btnWeek) PeriodType.WEEK else PeriodType.MONTH)
-            render()
+        findViewById<View>(R.id.fab).apply {
+            Ui.pressable(this, 0.92f)
+            setOnClickListener { addSheet() }
         }
-        findViewById<View>(R.id.prev).setOnClickListener { period = period.shift(-1); render() }
-        findViewById<View>(R.id.next).setOnClickListener { period = period.shift(1); render() }
+        findViewById<View>(R.id.menu).apply {
+            Ui.pressable(this, 0.9f)
+            setOnClickListener { Ui.push(this@MainActivity, Intent(this@MainActivity, SettingsActivity::class.java)) }
+        }
+        listOf(R.id.btnWeek, R.id.btnMonth).forEach { Ui.pressable(findViewById(it), 0.96f) }
+
+        // The date line scrolls away; the bar's small date and edge line track the scroll 1:1
+        val small = findViewById<TextView>(R.id.smallTitle)
+        val edge = findViewById<View>(R.id.topEdge)
+        findViewById<NestedScrollView>(R.id.scroll).setOnScrollChangeListener { _: NestedScrollView, _, y, _, _ ->
+            small.alpha = ((y - dp(8)) / dp(24).toFloat()).coerceIn(0f, 1f)
+            edge.alpha = (y / dp(16).toFloat()).coerceIn(0f, 1f)
+        }
+        findViewById<View>(R.id.btnWeek).setOnClickListener { if (period.type != PeriodType.WEEK) { period = Period.of(PeriodType.WEEK); render() } }
+        findViewById<View>(R.id.btnMonth).setOnClickListener { if (period.type != PeriodType.MONTH) { period = Period.of(PeriodType.MONTH); render() } }
+        findViewById<View>(R.id.prev).setOnClickListener { step(-1) }
+        findViewById<View>(R.id.next).setOnClickListener { step(1) }
+        swipeBetweenPeriods(findViewById(R.id.hero))
+        repairOnce()
+        if (savedInstanceState == null) handleShortcut(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShortcut(intent)
+    }
+
+    private fun handleShortcut(i: Intent?) {
+        when (i?.action) {
+            ACTION_ADD_EXPENSE -> Ui.push(this, Intent(this, EditExpenseActivity::class.java))
+            ACTION_ADD_LENT -> LoanDialog.show(this, kind = Ledger.LENT) { render() }
+            ACTION_ADD_BORROWED -> LoanDialog.show(this, kind = Ledger.BORROWED) { render() }
+            else -> return
+        }
+        i.action = Intent.ACTION_MAIN   // don't fire again on recreation
     }
 
     override fun onResume() {
         super.onResume()
-        renderSetup()
+        // red dot on the hamburger until every permission is on
+        findViewById<View>(R.id.menuDot).visibility = if (SettingsActivity.setupComplete(this)) View.GONE else View.VISIBLE
         render()
     }
 
-    // ---------------- toolbar ----------------
-
-    private fun setupToolbar() {
-        val tb = findViewById<MaterialToolbar>(R.id.toolbar)
-        val m = tb.menu
-        m.add(0, 1, 0, "Add").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        m.add(0, 2, 1, "Export CSV")
-        m.add(0, 3, 2, "Import past SMS")
-        m.add(0, 4, 3, "Show/hide bubble")
-        tb.setOnMenuItemClickListener {
-            when (it.itemId) {
-                1 -> startActivity(Intent(this, EditExpenseActivity::class.java))
-                2 -> exportCsv()
-                3 -> importSms()
-                4 -> {
-                    val on = !prefs.getBoolean(ScreenReaderService.KEY_BUBBLE, true)
-                    prefs.edit().putBoolean(ScreenReaderService.KEY_BUBBLE, on).apply()
-                    ScreenReaderService.refresh(this)
-                    toast(if (on) "Bubble on" else "Bubble hidden")
-                }
-            }
-            true
-        }
-    }
-
-    // ---------------- setup checklist ----------------
-
-    private fun accessibilityOn(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        val me = ComponentName(this, ScreenReaderService::class.java).flattenToString()
-        val splitter = TextUtils.SimpleStringSplitter(':').apply { setString(enabled) }
-        return splitter.any { it.equals(me, ignoreCase = true) }
-    }
-
-    private fun notifListenerOn(): Boolean =
-        NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
-
-    private fun smsOn() =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
-
-    private fun postNotifOn() = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-
-    private fun renderSetup() {
-        val card = findViewById<View>(R.id.setupCard)
-        val rows = findViewById<LinearLayout>(R.id.setupRows)
-        rows.removeAllViews()
-        fun row(title: String, desc: String, done: Boolean, action: () -> Unit) {
-            val r = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, (10 * dp).toInt(), 0, 0)
-            }
-            val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(this).apply {
-                text = (if (done) "✅ " else "⬜ ") + title
-                textSize = 15f; setTextColor(0xFF111827.toInt())
-            })
-            texts.addView(TextView(this).apply {
-                text = desc; textSize = 12f; setTextColor(0xFF6B7280.toInt())
-            })
-            r.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-            if (!done) r.addView(Button(this).apply {
-                text = "Enable"; isAllCaps = false
-                setOnClickListener { action() }
-            })
-            rows.addView(r)
-        }
-        row("Payment bubble", "Accessibility → Installed apps → Kharcha payment bubble → On", accessibilityOn()) {
-            AlertDialog.Builder(this)
-                .setTitle("Turn on the bubble")
-                .setMessage(
-                    "Android will open Accessibility settings.\n\n" +
-                        "Tap \"Installed apps\" (or \"Downloaded apps\") → \"Kharcha payment bubble\" → turn it on.\n\n" +
-                        "If Android says it's a \"restricted setting\": go to Settings → Apps → Kharcha → ⋮ (top right) → " +
-                        "\"Allow restricted settings\", then try again.\n\n" +
-                        "Kharcha only reads the screen when you tap the ₹ bubble, and nothing leaves your phone."
-                )
-                .setPositiveButton("Open settings") { _, _ ->
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }
-                .setNegativeButton("Later", null)
-                .show()
-        }
-        row("UPI app notifications", "Auto-log GPay, PhonePe, Paytm payments", notifListenerOn()) {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        }
-        row("Bank SMS", "Auto-log debit SMS from your bank", smsOn()) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS), REQ_SMS
-            )
-        }
-        row("Reports & alerts", "Weekly/monthly summary notifications", postNotifOn()) {
-            if (Build.VERSION.SDK_INT >= 33) ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF
-            )
-        }
-        card.visibility = if (accessibilityOn() && notifListenerOn() && smsOn() && postNotifOn()) View.GONE else View.VISIBLE
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        renderSetup()
-        if (requestCode == REQ_SMS && smsOn()) {
-            AlertDialog.Builder(this)
-                .setTitle("Import past payments?")
-                .setMessage("Kharcha can scan bank SMS from the last 90 days and add those debits now.")
-                .setPositiveButton("Import") { _, _ -> importSms() }
-                .setNegativeButton("Skip", null)
-                .show()
-        }
-    }
-
-    private fun importSms() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS), REQ_SMS
-            )
-            return
-        }
-        toast("Scanning SMS…")
+    /** Re-checks rows saved by older versions against the current parser and dedup rules. */
+    private fun repairOnce() {
+        if (prefs.getInt(KEY_REPAIR, 0) >= REPAIR_VERSION) return
         Thread {
-            val n = runCatching { SmsImporter.importInbox(applicationContext) }.getOrDefault(0)
-            runOnUiThread { toast("Added $n payments from SMS"); render() }
+            val n = runCatching { CaptureManager.repair(applicationContext) }.getOrNull() ?: return@Thread
+            prefs.edit().putInt(KEY_REPAIR, REPAIR_VERSION).apply()
+            if (n > 0) runOnUiThread { toast("Cleaned up $n entries"); render() }
         }.start()
+    }
+
+    /** + offers the three things you can add by hand. */
+    private fun addSheet() {
+        AlertDialog.Builder(this)
+            .setItems(arrayOf("Expense", "Money I lent", "Money I borrowed")) { _, i ->
+                when (i) {
+                    0 -> Ui.push(this, Intent(this, EditExpenseActivity::class.java))
+                    1 -> LoanDialog.show(this, kind = Ledger.LENT) { render() }
+                    else -> LoanDialog.show(this, kind = Ledger.BORROWED) { render() }
+                }
+            }
+            .show()
     }
 
     // ---------------- report ----------------
 
-    private fun render() {
-        findViewById<TextView>(R.id.periodLabel).text = period.label()
-        val isCurrent = System.currentTimeMillis() in period.start until period.end
-        findViewById<View>(R.id.next).alpha = if (period.start > System.currentTimeMillis()) 0.3f else 1f
+    private var dotSpring: SpringAnimation? = null
+    private var dotPlaced = false
 
-        val list = db.between(period.start, period.end)
-        val s = Reports.summarize(period, list)
-        val prevTotal = period.shift(-1).let { p -> db.between(p.start, p.end).sumOf { it.amount } }
+    /** Week / Month as words: the chosen one is black, the other faint, a red dot springs under the chosen one. */
+    private fun renderTabs() {
+        val week = period.type == PeriodType.WEEK
+        val on = findViewById<TextView>(if (week) R.id.btnWeek else R.id.btnMonth)
+        findViewById<TextView>(R.id.btnWeek).setTextColor(if (week) Ui.INK else Ui.FAINT)
+        findViewById<TextView>(R.id.btnMonth).setTextColor(if (week) Ui.FAINT else Ui.INK)
+        val dot = findViewById<View>(R.id.tabDot)
+        on.post {
+            val target = on.left + on.width / 2f - dot.width / 2f
+            if (!dotPlaced || Ui.reducedMotion(this)) { dot.translationX = target; dotPlaced = true; return@post }
+            val spring = dotSpring ?: SpringAnimation(dot, DynamicAnimation.TRANSLATION_X).apply {
+                spring = SpringForce().setDampingRatio(0.8f).setStiffness(stiffness(0.35f))
+                dotSpring = this
+            }
+            spring.animateToFinalPosition(target)   // re-targets from the live position if mid-flight
+        }
+    }
+
+    /** Move a week / month; the numbers leave toward one side and the new ones come in from the other. */
+    private fun step(by: Int) {
+        if (by > 0 && period.start > System.currentTimeMillis()) return
+        val hero = findViewById<View>(R.id.hero)
+        period = period.shift(by)
+        if (Ui.reducedMotion(this)) { render(); return }
+        val d = dp(28).toFloat() * by
+        hero.animate().translationX(-d).alpha(0f).setDuration(120).setInterpolator(Ui.EASE_OUT).withEndAction {
+            render()
+            hero.translationX = d
+            hero.animate().translationX(0f).alpha(1f).setDuration(260).setInterpolator(Ui.EASE_OUT).start()
+        }.start()
+    }
+
+    /** Horizontal fling on the total / chart = previous or next period. Vertical drags still scroll the page. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun swipeBetweenPeriods(target: View) {
+        val detector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: android.view.MotionEvent) = true
+            override fun onFling(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, vx: Float, vy: Float): Boolean {
+                if (kotlin.math.abs(vx) < 600 || kotlin.math.abs(vx) < kotlin.math.abs(vy) * 1.5f) return false
+                step(if (vx < 0) 1 else -1)
+                return true
+            }
+        })
+        target.setOnTouchListener { _, e -> detector.onTouchEvent(e) }
+    }
+
+    // ---------------- today ----------------
+
+    private fun renderToday() {
+        val now = System.currentTimeMillis()
+        val start = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val list = db.between(start, start + 36 * 3_600_000L).filter { it.timestamp <= now + 60_000 }
+        val spent = list.filter { it.isSpending }.sumOf { it.amount }
+        val date = SimpleDateFormat("EEEE, d MMMM", Locale("en", "IN")).format(now)
+        findViewById<TextView>(R.id.dateLabel).text = date.uppercase()
+        findViewById<TextView>(R.id.smallTitle).text = SimpleDateFormat("EEE, d MMM", Locale("en", "IN")).format(now)
+
+        val box = findViewById<LinearLayout>(R.id.today)
+        box.removeAllViews()
+        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
+        head.addView(Ui.text(this, "Today", 34f, Ui.semibold(this)), LinearLayout.LayoutParams(0, -2, 1f))
+        head.addView(Ui.text(this, Money.format(spent), 34f, Ui.light(this)))
+        box.addView(head)
+        box.addView(Ui.text(this,
+            when (list.size) { 0 -> "Nothing spent yet."; 1 -> "1 payment"; else -> "${list.size} payments" },
+            13f, Ui.regular(this), Ui.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        if (list.isEmpty()) return
+
+        // today's payments as cards you swipe through, bleeding to the screen edges
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(24), 0, dp(24), 0)
+        }
+        list.forEachIndexed { i, e -> row.addView(todayCard(e), LinearLayout.LayoutParams(dp(148), -2).apply { if (i > 0) marginStart = dp(10) }) }
+        box.addView(android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            addView(row)
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16); marginStart = -dp(24); marginEnd = -dp(24) })
+    }
+
+    private fun todayCard(e: Expense) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Ui.pill(this@MainActivity, Ui.FILL, 20)
+        setPadding(dp(14), dp(14), dp(14), dp(14))
+        addView(Ui.iconBadge(this@MainActivity, Ui.categoryIcon(e.category), 34, inverted = true))
+        addView(Ui.text(this@MainActivity, Money.format(e.amount), 20f, Ui.medium(this@MainActivity)).apply { setPadding(0, dp(14), 0, 0) })
+        addView(Ui.text(this@MainActivity, e.payee, 13f, Ui.regular(this@MainActivity)).apply {
+            setPadding(0, dp(4), 0, 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        })
+        addView(Ui.text(this@MainActivity,
+            SimpleDateFormat("h:mm a", Locale("en", "IN")).format(e.timestamp).lowercase(),
+            12f, Ui.regular(this@MainActivity), Ui.MUTED).apply { setPadding(0, dp(3), 0, 0) })
+        Ui.pressable(this, 0.96f)
+        setOnClickListener {
+            Ui.push(this@MainActivity, Intent(this@MainActivity, TransactionActivity::class.java).putExtra(TransactionActivity.EXTRA_ID, e.id))
+        }
+    }
+
+    /** Apple's "response" (seconds) → spring stiffness. */
+    private fun stiffness(response: Float) = ((2 * Math.PI / response) * (2 * Math.PI / response)).toFloat()
+
+    private fun render() {
+        renderToday()
+        renderTabs()
+        findViewById<TextView>(R.id.periodLabel).text = period.label()
+        val now = System.currentTimeMillis()
+        val isCurrent = now in period.start until period.end
+        findViewById<View>(R.id.next).alpha = if (isCurrent || period.start > now) 0.2f else 0.5f
+
+        val list = db.between(period.start, period.end)          // everything, for Activity
+        val s = Reports.summarize(period, list.filter { it.isSpending })
+        val prevTotal = period.shift(-1).let { p -> db.spending(p.start, p.end).sumOf { it.amount } }
 
         findViewById<TextView>(R.id.total).text = Money.format(s.total)
         val change = when {
@@ -225,143 +257,194 @@ class MainActivity : AppCompatActivity() {
             else -> {
                 val pct = ((s.total - prevTotal) / prevTotal * 100).toInt()
                 val word = if (period.type == PeriodType.WEEK) "last week" else "last month"
-                if (pct >= 0) "  ·  ▲ $pct% vs $word" else "  ·  ▼ ${-pct}% vs $word"
+                if (pct >= 0) "   ↑ $pct% vs $word" else "   ↓ ${-pct}% vs $word"
             }
         }
-        val avgDays = if (isCurrent) ((System.currentTimeMillis() - period.start) / 86_400_000L + 1).toInt() else period.days()
+        val avgDays = if (isCurrent) ((now - period.start) / 86_400_000L + 1).toInt() else period.days()
         val avg = if (avgDays > 0) s.total / avgDays else 0.0
         findViewById<TextView>(R.id.subtitle).text =
-            "${s.count} payments  ·  ${Money.format(avg)}/day$change"
+            "${s.count} payments   ${Money.format(avg)} a day$change"
 
         val todayIdx = if (isCurrent) {
-            if (period.type == PeriodType.MONTH)
-                java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) - 1
-            else ((System.currentTimeMillis() - period.start) / 86_400_000L).toInt()
+            if (period.type == PeriodType.MONTH) Calendar.getInstance().get(Calendar.DAY_OF_MONTH) - 1
+            else ((now - period.start) / 86_400_000L).toInt()
         } else -1
         findViewById<BarChartView>(R.id.chart).set(s.daily, s.dayLabels, todayIdx)
+        renderLoans()
 
-        // categories
         val cats = findViewById<LinearLayout>(R.id.categories)
         cats.removeAllViews()
-        if (s.byCategory.isEmpty()) cats.addView(empty("No spends yet"))
-        for ((cat, amt) in s.byCategory) {
-            cats.addView(barRow(
-                "${Categories.emoji[cat] ?: ""}  $cat", amt, if (s.total > 0) amt / s.total else 0.0,
-                Categories.colors[cat] ?: 0xFF9CA3AF.toInt()
-            ))
-        }
+        if (s.byCategory.isEmpty()) cats.addView(empty("Nothing spent yet."))
+        for ((cat, amt) in s.byCategory) cats.addView(categoryRow(cat, amt, if (s.total > 0) amt / s.total else 0.0))
 
-        // payees
         val pay = findViewById<LinearLayout>(R.id.payees)
         pay.removeAllViews()
         if (s.topPayees.isEmpty()) pay.addView(empty("—"))
-        val maxP = s.topPayees.firstOrNull()?.second ?: 1.0
-        for ((name, amt) in s.topPayees) pay.addView(barRow(name, amt, amt / maxP, 0xFF0F766E.toInt()))
+        for ((i, p) in s.topPayees.withIndex()) {
+            if (i > 0) pay.addView(Ui.hairline(this))
+            pay.addView(payeeRow(i + 1, p.first, p.second))
+        }
 
-        // transactions
         val tx = findViewById<LinearLayout>(R.id.transactions)
         tx.removeAllViews()
-        if (list.isEmpty()) tx.addView(empty("Tap the ₹ bubble on a payment screen, or turn on SMS/notifications above."))
-        val df = SimpleDateFormat("EEE d MMM, h:mm a", Locale("en", "IN"))
-        for (e in list) tx.addView(txRow(e, df))
-    }
-
-    private fun empty(msg: String) = TextView(this).apply {
-        text = msg; textSize = 13f; setTextColor(0xFF6B7280.toInt())
-        setPadding((8 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt())
-    }
-
-    private fun barRow(label: String, amount: Double, frac: Double, color: Int): View {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((4 * dp).toInt(), (6 * dp).toInt(), (4 * dp).toInt(), (6 * dp).toInt())
+        if (list.isEmpty()) tx.addView(empty("Payments show up here as they happen. Open ☰ to turn on SMS and notification reading."))
+        // Grouped by day, each day with what was spent that day
+        for ((i, group) in list.groupBy { dayLabel(it.timestamp) }.entries.withIndex()) {
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(if (i == 0) 4 else 26), 0, dp(6))
+            }
+            header.addView(Ui.overline(this, group.key), LinearLayout.LayoutParams(0, -2, 1f))
+            header.addView(Ui.overline(this, Money.format(group.value.filter { it.isSpending }.sumOf { it.amount })))
+            tx.addView(header)
+            group.value.forEachIndexed { j, e ->
+                if (j > 0) tx.addView(Ui.hairline(this, dp(60)))
+                tx.addView(txRow(e))
+            }
         }
-        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        top.addView(TextView(this).apply {
-            text = label; textSize = 14f; setTextColor(0xFF111827.toInt())
-            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(TextView(this).apply {
-            text = Money.format(amount); textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xFF111827.toInt())
+    }
+
+    /** "You'll get ₹X · You owe ₹Y", opens Lend & borrow. */
+    private fun renderLoans() {
+        val card = findViewById<LinearLayout>(R.id.loansCard)
+        card.removeAllViews()
+        val balances = db.people().map { Ledger.balance(it.second) }
+        val get = balances.filter { it > 0.009 }.sum()
+        val owe = balances.filter { it < -0.009 }.sumOf { -it }
+        card.addView(Ui.iconBadge(this, R.drawable.ic_cat_lent, 40, inverted = true).apply {
+            (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(14)
         })
+        val mid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        mid.addView(Ui.text(this, "Lend & borrow", 16f, Ui.medium(this)))
+        val sub = if (balances.isEmpty()) "Track who owes you, and whom you owe"
+            else "You'll get ${Money.format(get)}   ·   You owe ${Money.format(owe)}"
+        mid.addView(Ui.text(this, sub, 13f, Ui.regular(this), Ui.MUTED).apply { setPadding(0, dp(5), 0, 0) })
+        card.addView(mid, LinearLayout.LayoutParams(0, -2, 1f))
+        card.addView(android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.ic_forward); alpha = 0.35f
+        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+        if (!card.hasOnClickListeners()) {
+            Ui.pressable(card, 0.98f)
+            card.setOnClickListener { Ui.push(this, Intent(this, LoansActivity::class.java)) }
+            // hold: straight to "I lent / I borrowed", same as + on the Lend & borrow page
+            card.setOnLongClickListener {
+                it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                LoanDialog.show(this) { render() }
+                true
+            }
+        }
+    }
+
+    private fun dayLabel(t: Long): String {
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return when {
+            t >= today -> "Today"
+            t >= today - 86_400_000L -> "Yesterday"
+            else -> SimpleDateFormat("EEEE, d MMMM", Locale("en", "IN")).format(t)
+        }
+    }
+
+    private fun empty(msg: String) = Ui.text(this, msg, 14f, Ui.regular(this), Ui.MUTED).apply {
+        setLineSpacing(0f, 1.3f)
+        setPadding(0, dp(4), 0, dp(4))
+    }
+
+    /** Icon, category, share and amount, with a hairline bar. */
+    private fun categoryRow(cat: String, amount: Double, frac: Double): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, dp(10))
+        }
+        row.addView(Ui.iconBadge(this, Ui.categoryIcon(cat), 40).apply {
+            (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(14)
+        })
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        row.addView(box, LinearLayout.LayoutParams(0, -2, 1f))
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
+        }
+        top.addView(Ui.text(this, cat, 16f, Ui.medium(this)), LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(Ui.text(this, "${(frac * 100).toInt()}%", 12f, Ui.regular(this), Ui.MUTED).apply {
+            setPadding(0, 0, dp(12), dp(2))
+        })
+        top.addView(Ui.text(this, Money.format(amount), 15f, Ui.medium(this)).apply { setPadding(0, 0, 0, dp(2)) })
         box.addView(top)
         val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000; progress = (frac * 1000).toInt().coerceIn(0, 1000)
-            progressTintList = android.content.res.ColorStateList.valueOf(color)
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE5E7EB.toInt())
+            progressTintList = android.content.res.ColorStateList.valueOf(Ui.INK)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.HAIRLINE)
         }
-        box.addView(bar, LinearLayout.LayoutParams(-1, (6 * dp).toInt()).apply { topMargin = (4 * dp).toInt() })
-        return box
+        box.addView(bar, LinearLayout.LayoutParams(-1, dp(2)).apply { topMargin = dp(10) })
+        return row
     }
 
-    private fun txRow(e: Expense, df: SimpleDateFormat): View {
+    private fun payeeRow(rank: Int, name: String, amount: Double): View {
         val r = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
-            isClickable = true
-            setBackgroundResource(android.R.drawable.list_selector_background)
-            setOnClickListener {
-                startActivity(Intent(this@MainActivity, EditExpenseActivity::class.java)
-                    .putExtra(EditExpenseActivity.EXTRA_ID, e.id))
-            }
+            setPadding(0, dp(13), 0, dp(13))
         }
-        val icon = TextView(this).apply {
-            text = Categories.emoji[e.category] ?: "📦"
-            textSize = 18f; gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(((Categories.colors[e.category] ?: 0xFF9CA3AF.toInt()) and 0x00FFFFFF) or 0x22000000)
-            }
-        }
-        r.addView(icon, LinearLayout.LayoutParams((38 * dp).toInt(), (38 * dp).toInt()).apply {
-            marginEnd = (12 * dp).toInt()
-        })
-        val mid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        mid.addView(TextView(this).apply {
-            text = e.payee; textSize = 15f; setTextColor(0xFF111827.toInt())
+        r.addView(Ui.text(this, "$rank", 15f, Ui.regular(this), Ui.FAINT), LinearLayout.LayoutParams(dp(28), -2))
+        r.addView(Ui.text(this, name, 15f, Ui.regular(this)).apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        })
-        mid.addView(TextView(this).apply {
-            text = "${df.format(e.timestamp)}  ·  ${e.category}  ·  ${Source.label(e.source)}"
-            textSize = 12f; setTextColor(0xFF6B7280.toInt())
-            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        })
-        r.addView(mid, LinearLayout.LayoutParams(0, -2, 1f))
-        r.addView(TextView(this).apply {
-            text = "−" + Money.format(e.amount); textSize = 15f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xFF111827.toInt())
-        })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        r.addView(Ui.text(this, Money.format(amount), 15f, Ui.medium(this)))
         return r
     }
 
-    // ---------------- export ----------------
-
-    private fun exportCsv() {
-        val list = db.all()
-        if (list.isEmpty()) { toast("Nothing to export yet"); return }
-        val df = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-        fun q(s: String?) = "\"" + (s ?: "").replace("\"", "\"\"") + "\""
-        val csv = buildString {
-            append("Date,Amount,Payee,Category,Source,Reference,Note\n")
-            for (e in list.sortedBy { it.timestamp }) {
-                append(df.format(e.timestamp)).append(',')
-                append(String.format(Locale.US, "%.2f", e.amount)).append(',')
-                append(q(e.payee)).append(',').append(q(e.category)).append(',')
-                append(Source.label(e.source)).append(',').append(q(e.ref)).append(',')
-                append(q(e.note)).append('\n')
+    private fun txRow(e: Expense): View {
+        val r = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, dp(12))
+            isClickable = true
+            Ui.pressable(this, 0.98f)
+            setOnClickListener {
+                Ui.push(this@MainActivity, Intent(this@MainActivity, TransactionActivity::class.java)
+                    .putExtra(TransactionActivity.EXTRA_ID, e.id))
             }
         }
-        val dir = File(cacheDir, "exports").apply { mkdirs() }
-        val f = File(dir, "kharcha-expenses.csv").apply { writeText(csv) }
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
-        startActivity(Intent.createChooser(
-            Intent(Intent.ACTION_SEND).setType("text/csv")
-                .putExtra(Intent.EXTRA_STREAM, uri)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-            "Export expenses"
-        ))
+        r.addView(Ui.iconBadge(this, Ui.categoryIcon(e.category), 44).apply {
+            (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(16)
+        })
+
+        // Like Google Pay: who, what and when, and the account it came from
+        val time = SimpleDateFormat("h:mm a", Locale("en", "IN")).format(e.timestamp).lowercase()
+        val account = e.raw?.let { PaymentParser.account(it) }
+        val method = e.raw?.let { PaymentParser.method(it) }
+        val status = when (e.category) {
+            Categories.LENT -> "Lent"
+            Categories.REPAID -> "Paid back"
+            else -> "Paid"
+        }
+        val mid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val line1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
+        line1.addView(Ui.text(this, e.payee, 16f, Ui.medium(this)).apply {
+            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        line1.addView(Ui.text(this, Money.format(e.amount), 16f, Ui.medium(this)).apply { setPadding(dp(12), 0, 0, 0) })
+        mid.addView(line1)
+        val line2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(5), 0, 0) }
+        line2.addView(Ui.text(this, "${e.category}  ·  $time", 13f, Ui.regular(this), Ui.MUTED).apply {
+            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        line2.addView(Ui.text(this, status, 13f, Ui.regular(this), if (Categories.isLoan(e.category)) Ui.INK else Ui.MUTED).apply {
+            setPadding(dp(12), 0, 0, 0)
+        })
+        mid.addView(line2)
+        // "Axis Bank Credit Card ••0622" already says it's a card, so don't repeat "Credit card"
+        val saysCard = account?.contains("Card") == true && method?.substringBefore(" · ")?.endsWith("card") == true
+        val methodText = if (saysCard) method?.substringAfter(" · ", "")?.ifEmpty { null } else method
+        val from = listOfNotNull(account, methodText)
+        if (from.isNotEmpty()) mid.addView(Ui.text(this, from.joinToString("  ·  "), 12f, Ui.regular(this), Ui.FAINT).apply {
+            setPadding(0, dp(4), 0, 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        })
+        r.addView(mid, LinearLayout.LayoutParams(0, -2, 1f))
+        return r
     }
 
     private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_SHORT).show()

@@ -9,20 +9,10 @@ object Categories {
         "Rent", "Entertainment", "Health", "Education", "Transfers", "Other"
     )
 
-    val emoji = mapOf(
-        "Food" to "🍔", "Groceries" to "🛒", "Travel" to "🚕", "Fuel" to "⛽",
-        "Shopping" to "🛍️", "Bills" to "💡", "Rent" to "🏠", "Entertainment" to "🎬",
-        "Health" to "💊", "Education" to "📚", "Transfers" to "👤", "Other" to "📦"
-    )
-
-    val colors = mapOf(
-        "Food" to 0xFFF97316.toInt(), "Groceries" to 0xFF22C55E.toInt(),
-        "Travel" to 0xFF3B82F6.toInt(), "Fuel" to 0xFFEAB308.toInt(),
-        "Shopping" to 0xFFEC4899.toInt(), "Bills" to 0xFF8B5CF6.toInt(),
-        "Rent" to 0xFF14B8A6.toInt(), "Entertainment" to 0xFFEF4444.toInt(),
-        "Health" to 0xFF06B6D4.toInt(), "Education" to 0xFF6366F1.toInt(),
-        "Transfers" to 0xFF64748B.toInt(), "Other" to 0xFF9CA3AF.toInt()
-    )
+    /** Money that left your account but isn't spending: lent out, or paying back a loan. */
+    const val LENT = "Lent"
+    const val REPAID = "Repaid"
+    fun isLoan(category: String) = category == LENT || category == REPAID
 
     private val keywords: List<Pair<String, List<String>>> = listOf(
         "Food" to listOf(
@@ -32,13 +22,13 @@ object Categories {
             "haldiram", "subway", "barbeque", "canteen", "juice", "thindi", "darshini"
         ),
         "Groceries" to listOf(
-            "blinkit", "zepto", "instamart", "bigbasket", "dmart", "jiomart", "grofers",
+            "blinkit", "zepto", "instama", "bigbasket", "dmart", "jiomart", "grofers",
             "kirana", "supermarket", "mart", "fresh", "milk", "dairy", "nandini",
             "more retail", "ratnadeep", "spencer", "vegetable", "fruits", "country delight"
         ),
         "Travel" to listOf(
             "uber", " ola", "rapido", "namma yatri", "irctc", "railway", "metro", "bmrcl",
-            "redbus", "makemytrip", "goibibo", "cleartrip", "indigo", "air india", "akasa",
+            "redbus", "makemyt", "ibibo", "cleartrip", "indigo", "air india", "akasa",
             "vistara", "ixigo", " auto", " cab", "taxi", " bus", "fastag", "toll", "parking", "yulu"
         ),
         "Fuel" to listOf(
@@ -53,7 +43,8 @@ object Categories {
         "Bills" to listOf(
             "electricity", "bescom", "bwssb", "water", "recharge", "jio", "airtel", "vodafone",
             " vi ", "bsnl", "act fibernet", "broadband", "wifi", "dth", "tata play", " gas",
-            "indane", "bharatgas", "insurance", " lic", " emi", "bill", "credit card", " cred"
+            "indane", "bharatgas", "insurance", " lic", " emi", "bill", "credit card", " cred",
+            "anthropic", "claude", "openai", "chatgpt", "github", "google play", "google cloud", "icloud"
         ),
         "Rent" to listOf(" rent", "nobroker", "housing", "pg ", "hostel", "maintenance", "society"),
         "Entertainment" to listOf(

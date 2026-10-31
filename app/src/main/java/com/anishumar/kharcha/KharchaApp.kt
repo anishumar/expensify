@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.anishumar.kharcha.data.ExpenseDb
 import com.anishumar.kharcha.report.Period
 import com.anishumar.kharcha.report.PeriodType
 import com.anishumar.kharcha.report.ReportWorker
+import com.anishumar.kharcha.widget.Widgets
 import java.util.concurrent.TimeUnit
 
 class KharchaApp : Application() {
@@ -28,6 +30,8 @@ class KharchaApp : Application() {
         nm.createNotificationChannel(
             NotificationChannel(CH_REPORT, "Weekly & monthly reports", NotificationManager.IMPORTANCE_DEFAULT)
         )
+
+        ExpenseDb.onChange = { Widgets.requestRefresh(this) }
 
         // First run: don't send reports for periods before the app was installed
         val prefs = getSharedPreferences("kharcha", MODE_PRIVATE)

@@ -11,39 +11,29 @@ import com.anishumar.kharcha.data.Categories
 import com.anishumar.kharcha.data.Expense
 import com.anishumar.kharcha.data.ExpenseDb
 import com.anishumar.kharcha.data.Money
+import com.anishumar.kharcha.data.Source
 import com.anishumar.kharcha.ui.EditExpenseActivity
+import com.anishumar.kharcha.ui.TransactionActivity
 import kotlin.math.abs
 
 /** Saves captured payments, merging duplicates that arrive via SMS + notification + bubble. */
 object CaptureManager {
 
-    private const val DUP_WINDOW_MS = 15 * 60 * 1000L
-    private const val SAME_AMOUNT_ANY_PAYEE_MS = 3 * 60 * 1000L
-
     /** Returns the existing expense this capture duplicates, if any. */
     fun findDuplicate(ctx: Context, e: Expense): Expense? {
         val db = ExpenseDb.get(ctx)
         if (!e.ref.isNullOrBlank()) db.byRef(e.ref)?.let { return it }
-        val near = db.between(e.timestamp - DUP_WINDOW_MS, e.timestamp + DUP_WINDOW_MS)
-        return near.firstOrNull { o ->
-            if (abs(o.amount - e.amount) > 0.009) return@firstOrNull false
-            if (!o.ref.isNullOrBlank() && !e.ref.isNullOrBlank() && o.ref != e.ref) return@firstOrNull false
-            similar(o.payee, e.payee) || abs(o.timestamp - e.timestamp) < SAME_AMOUNT_ANY_PAYEE_MS
-        }
-    }
-
-    private fun similar(a: String, b: String): Boolean {
-        val x = Categories.key(a)
-        val y = Categories.key(b)
-        if (x.isEmpty() || y.isEmpty()) return true
-        val n = minOf(5, x.length, y.length)
-        return x.contains(y.take(n)) || y.contains(x.take(n))
+        val w = PaymentMatcher.DUP_WINDOW_MS
+        // closest in time first, so a burst of same-amount payments pairs up correctly
+        return db.between(e.timestamp - w, e.timestamp + w)
+            .sortedBy { abs(it.timestamp - e.timestamp) }
+            .firstOrNull { PaymentMatcher.isSamePayment(it, e) }
     }
 
     /** Better payee = a readable name rather than a raw VPA / blank. */
     private fun betterPayee(old: String, new: String): String = when {
-        new.isBlank() -> old
-        old.isBlank() -> new
+        new.isBlank() || new == "Unknown" -> old
+        old.isBlank() || old == "Unknown" -> new
         old.contains("@") && !new.contains("@") -> new
         else -> old
     }
@@ -93,6 +83,49 @@ object CaptureManager {
         } else db.insert(e)
     }
 
+    /**
+     * Re-checks auto-logged rows with the current parser and duplicate rules:
+     * drops ones that aren't payments, fills in payees, merges duplicates.
+     * Rows with a note, and manual entries, are left alone.
+     */
+    @Synchronized
+    fun repair(ctx: Context): Int {
+        val db = ExpenseDb.get(ctx)
+        var changed = 0
+        val kept = mutableListOf<Expense>()
+        fun withPayee(x: Expense, payee: String) = x.copy(
+            payee = payee,
+            category = if (x.category == "Other") Categories.guess(ctx, payee) else x.category
+        )
+        for (row in db.all().sortedBy { it.timestamp }) {
+            var e = row
+            val auto = e.source == Source.SMS || e.source == Source.NOTIFICATION
+            val raw = e.raw
+            if (auto && raw != null && e.note == null) {
+                val p = PaymentParser.parse(raw)
+                if (p == null) { db.delete(e.id); changed++; continue }
+                if (p.payee.isNotBlank() && !PaymentParser.isValidPayee(e.payee)) e = withPayee(e, p.payee)
+                // Learned rules come first in guess(), so a category the user picked sticks
+                if (e.category == "Other" || e.category == "Transfers") e = e.copy(category = Categories.guess(ctx, e.payee))
+            }
+            val dup = if (e.source == Source.MANUAL) null
+                else kept.lastOrNull { it.source != Source.MANUAL && PaymentMatcher.isSamePayment(it, e) }
+            if (dup != null && e.note == null) {
+                var merged = dup.copy(ref = dup.ref ?: e.ref)
+                if (e.source == Source.SCREEN) merged = merged.copy(category = e.category)
+                val payee = betterPayee(dup.payee, e.payee)
+                if (payee != dup.payee) merged = withPayee(merged, payee)
+                db.update(merged)
+                kept[kept.indexOf(dup)] = merged
+                db.delete(e.id); changed++
+                continue
+            }
+            if (e != row) { db.update(e); changed++ }
+            kept += e
+        }
+        return changed
+    }
+
     private fun notifySaved(ctx: Context, e: Expense) {
         val open = Intent(ctx, EditExpenseActivity::class.java)
             .putExtra(EditExpenseActivity.EXTRA_ID, e.id)
@@ -101,12 +134,18 @@ object CaptureManager {
             ctx, e.id.toInt(), open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val emoji = Categories.emoji[e.category] ?: ""
+        val details = PendingIntent.getActivity(
+            ctx, -e.id.toInt(),
+            Intent(ctx, TransactionActivity::class.java)
+                .putExtra(TransactionActivity.EXTRA_ID, e.id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val n = NotificationCompat.Builder(ctx, KharchaApp.CH_CAPTURE)
             .setSmallIcon(R.drawable.ic_launcher_fg)
             .setContentTitle("${Money.format(e.amount)} · ${e.payee}")
-            .setContentText("Logged as $emoji ${e.category}. Tap to change.")
-            .setContentIntent(pi)
+            .setContentText("Logged as ${e.category}")
+            .setContentIntent(details)
             .addAction(0, "Change category", pi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

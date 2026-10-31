@@ -3,16 +3,33 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/paper"
     android:orientation="vertical">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/toolbar"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/brand"
-        android:theme="@style/ThemeOverlay.Material3.Dark.ActionBar"
-        app:title="Expense"
-        app:titleTextColor="#FFFFFF" />
+        android:layout_height="60dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="24dp">
+
+        <ImageButton
+            android:id="@+id/back"
+            style="@style/IconButton"
+            android:contentDescription="Back"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/inter_semibold"
+            android:letterSpacing="-0.013"
+            android:textColor="@color/ink"
+            android:textSize="17sp" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
@@ -23,7 +40,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="24dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="16dp">
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
@@ -36,7 +56,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="numberDecimal"
-                    android:textSize="22sp" />
+                    android:fontFamily="@font/inter_light"
+                    android:textSize="30sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -56,9 +77,13 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="Category"
-                android:textColor="@color/muted" />
+                android:layout_marginTop="28dp"
+                android:layout_marginBottom="6dp"
+                android:fontFamily="@font/inter_medium"
+                android:letterSpacing="0.14"
+                android:text="CATEGORY"
+                android:textColor="@color/muted"
+                android:textSize="11sp" />
 
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/chips"
@@ -109,7 +134,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp">
+        android:paddingStart="24dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="16dp">
 
         <Button
             android:id="@+id/delete"
@@ -118,13 +146,16 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
-            android:text="Delete" />
+            android:text="Delete"
+            android:textColor="@color/accent"
+            app:strokeColor="@color/hairline" />
 
         <Button
             android:id="@+id/save"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="2"
+            android:minHeight="52dp"
             android:text="Save" />
     </LinearLayout>
 </LinearLayout>

@@ -1,5 +1,15 @@
 <resources>
-    <string name="app_name">Kharcha</string>
-    <string name="accessibility_label">Kharcha payment bubble</string>
-    <string name="accessibility_description">Shows a floating ₹ bubble. When you tap it on a payment success screen, Kharcha reads the text on that screen (amount, payee, UPI reference) to log the expense. Nothing is read unless you tap the bubble, and nothing leaves your phone.</string>
+    <string name="app_name">Expensify</string>
+    <string name="widget_today">Expensify · Today</string>
+    <string name="widget_today_desc">What you\'ve spent today</string>
+    <string name="widget_week">Expensify · This week</string>
+    <string name="widget_week_desc">This week\'s spend with a daily chart</string>
+    <string name="shortcut_expense">Expense</string>
+    <string name="shortcut_expense_long">Add expense</string>
+    <string name="shortcut_lent">Lent</string>
+    <string name="shortcut_lent_long">Money I lent</string>
+    <string name="shortcut_borrowed">Borrowed</string>
+    <string name="shortcut_borrowed_long">Money I borrowed</string>
+    <string name="accessibility_label">Expensify payment bubble</string>
+    <string name="accessibility_description">Shows a floating ₹ bubble. When you tap it on a payment success screen, Expensify reads the text on that screen (amount, payee, UPI reference) to log the expense. Nothing is read unless you tap the bubble, and nothing leaves your phone.</string>
 </resources>

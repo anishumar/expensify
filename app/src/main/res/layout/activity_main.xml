@@ -1,166 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
-
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/brand"
-        app:title="Kharcha"
-        app:titleTextColor="#FFFFFF"
-        android:theme="@style/ThemeOverlay.Material3.Dark.ActionBar"
-        app:popupTheme="@style/ThemeOverlay.Material3.Light"
-        xmlns:app="http://schemas.android.com/apk/res-auto" />
+    android:background="@color/paper">
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingTop="56dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp">
 
-            <!-- Setup checklist (hidden when everything is enabled) -->
-            <LinearLayout
-                android:id="@+id/setupCard"
-                android:layout_width="match_parent"
+            <!-- Today: total, then today's payments as swipeable cards -->
+            <TextView
+                android:id="@+id/dateLabel"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="14dp"
-                android:background="@drawable/card_bg"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Finish setup"
-                    android:textColor="@color/text"
-                    android:textSize="17sp"
-                    android:textStyle="bold" />
-
-                <LinearLayout
-                    android:id="@+id/setupRows"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical" />
-            </LinearLayout>
-
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/periodToggle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:singleSelection="true"
-                app:selectionRequired="true"
-                xmlns:app="http://schemas.android.com/apk/res-auto">
-
-                <Button
-                    android:id="@+id/btnWeek"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Week" />
-
-                <Button
-                    android:id="@+id/btnMonth"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Month" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
+                android:fontFamily="@font/inter_medium"
+                android:letterSpacing="0.06"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
 
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/prev"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:gravity="center"
-                    android:text="‹"
-                    android:textColor="@color/brand"
-                    android:textSize="28sp" />
-
-                <TextView
-                    android:id="@+id/periodLabel"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:textColor="@color/text"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/next"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:gravity="center"
-                    android:text="›"
-                    android:textColor="@color/brand"
-                    android:textSize="28sp" />
-            </LinearLayout>
-
-            <!-- Total + chart -->
-            <LinearLayout
+                android:id="@+id/today"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/card_bg"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:orientation="vertical" />
 
-                <TextView
+            <!-- Week / Month as words; a red dot marks the selected one -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="48dp">
+
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Spent"
-                    android:textColor="@color/muted"
-                    android:textSize="13sp" />
+                    android:orientation="horizontal"
+                    android:paddingBottom="12dp">
+
+                    <TextView
+                        android:id="@+id/btnWeek"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="24dp"
+                        android:fontFamily="@font/inter_display_semibold"
+                        android:letterSpacing="-0.009"
+                        android:text="Week"
+                        android:textColor="@color/ink"
+                        android:textSize="28sp" />
+
+                    <TextView
+                        android:id="@+id/btnMonth"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/inter_display_semibold"
+                        android:letterSpacing="-0.009"
+                        android:text="Month"
+                        android:textColor="@color/faint"
+                        android:textSize="28sp" />
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/tabDot"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_gravity="bottom|start"
+                    android:background="@drawable/dot_tab" />
+            </FrameLayout>
+
+            <!-- Swipe sideways on this block to move between weeks / months -->
+            <LinearLayout
+                android:id="@+id/hero"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/periodLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/inter_medium"
+                        android:letterSpacing="-0.006"
+                        android:textColor="@color/muted"
+                        android:textSize="14sp" />
+
+                    <ImageButton
+                        android:id="@+id/prev"
+                        style="@style/IconButton"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:alpha="0.5"
+                        android:contentDescription="Previous"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_back" />
+
+                    <ImageButton
+                        android:id="@+id/next"
+                        style="@style/IconButton"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:alpha="0.5"
+                        android:contentDescription="Next"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_forward" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/total"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/text"
-                    android:textSize="34sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="14dp"
+                    android:fontFamily="@font/inter_display_light"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="-0.011"
+                    android:textColor="@color/ink"
+                    android:textSize="58sp" />
 
                 <TextView
                     android:id="@+id/subtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:letterSpacing="-0.003"
                     android:textColor="@color/muted"
                     android:textSize="13sp" />
 
                 <com.anishumar.kharcha.ui.BarChartView
                     android:id="@+id/chart"
                     android:layout_width="match_parent"
-                    android:layout_height="140dp"
-                    android:layout_marginTop="14dp" />
+                    android:layout_height="150dp"
+                    android:layout_marginTop="28dp" />
             </LinearLayout>
+
+            <!-- Lend & borrow summary -->
+            <LinearLayout
+                android:id="@+id/loansCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:background="@drawable/card_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="18dp"
+                android:paddingTop="16dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="16dp" />
 
             <TextView
                 style="@style/SectionTitle"
-                android:text="By category" />
+                android:text="Categories" />
 
             <LinearLayout
                 android:id="@+id/categories"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/card_bg"
-                android:orientation="vertical"
-                android:padding="12dp" />
+                android:orientation="vertical" />
 
             <TextView
                 style="@style/SectionTitle"
@@ -170,25 +181,96 @@
                 android:id="@+id/payees"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/card_bg"
-                android:orientation="vertical"
-                android:padding="12dp" />
+                android:orientation="vertical" />
 
             <TextView
                 style="@style/SectionTitle"
-                android:text="Transactions" />
+                android:text="Activity" />
 
             <LinearLayout
                 android:id="@+id/transactions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/card_bg"
-                android:orientation="vertical"
-                android:paddingVertical="4dp" />
+                android:orientation="vertical" />
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="80dp" />
+                android:layout_height="112dp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-</LinearLayout>
+
+    <!-- Floating bar: content scrolls underneath. Solid, since Android views can't blur what's behind them -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/paper"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="16dp">
+
+        <!-- Fades in once the date line has scrolled away -->
+        <TextView
+            android:id="@+id/smallTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:alpha="0"
+            android:fontFamily="@font/inter_semibold"
+            android:letterSpacing="-0.013"
+            android:textColor="@color/ink"
+            android:textSize="17sp" />
+
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp">
+
+            <ImageButton
+                android:id="@+id/menu"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:background="@drawable/menu_bg"
+                android:contentDescription="Settings and permissions"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_menu" />
+
+            <View
+                android:id="@+id/menuDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/dot_accent"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Scroll edge: appears only when content is actually under the bar -->
+    <View
+        android:id="@+id/topEdge"
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginTop="56dp"
+        android:alpha="0"
+        android:background="@color/hairline" />
+
+    <!-- One-handed add: bottom right, within thumb reach -->
+    <ImageButton
+        android:id="@+id/fab"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/fab_bg"
+        android:contentDescription="Add"
+        android:elevation="8dp"
+        android:padding="17dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_add"
+        android:tint="@color/paper" />
+</FrameLayout>

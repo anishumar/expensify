@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirror of push_enter: leaves through the right edge it came in from -->
+<translate xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="400"
+    android:fromXDelta="0"
+    android:interpolator="@interpolator/ease_drawer"
+    android:toXDelta="100%"
+    android:zAdjustment="top" />
