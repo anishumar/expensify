@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Kharcha</string>
+    <string name="accessibility_label">Kharcha payment bubble</string>
+    <string name="accessibility_description">Shows a floating ₹ bubble. When you tap it on a payment success screen, Kharcha reads the text on that screen (amount, payee, UPI reference) to log the expense. Nothing is read unless you tap the bubble, and nothing leaves your phone.</string>
+</resources>
